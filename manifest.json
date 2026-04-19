@@ -1,6 +1,6 @@
 {
   "name": "Tu Rutina Fácil",
-  "short_name": "Tu Rutina",
+  "short_name": "Tu Rutina Facil",
   "description": "Tu plan de entrenamiento personalizado",
   "start_url": "./index.html",
   "display": "standalone",
