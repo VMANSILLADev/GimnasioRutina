@@ -794,31 +794,15 @@ window.cerrarPrivacidad = () => {
   document.getElementById('modal-privacidad').style.display = 'none';
 };
 
-// Verificar si el usuario ya aceptó términos → habilitar login directo
-async function verificarTerminos(uid) {
-  try {
-    const snap = await getDoc(doc(db, 'terminos', uid));
-    return snap.exists();
-  } catch(e) {
-    return false;
-  }
-}
-
 window.logout = async () => {
   await signOut(auth);
 };
 
 async function verificarTerminos(uid) {
   try {
-    const snap = await getDocs(query(collection(db, 'terminos'), where('uid', '==', uid)));
-    return !snap.empty;
+    const snap = await getDoc(doc(db, 'terminos', uid));
+    return snap.exists();
   } catch(e) { return false; }
-}
-
-async function guardarTerminos(uid) {
-  try {
-    await addDoc(collection(db, 'terminos'), { uid, fecha: new Date(), version: '1.0' });
-  } catch(e) { console.log('error guardando términos', e); }
 }
 
 onAuthStateChanged(auth, async user => {
@@ -827,8 +811,9 @@ onAuthStateChanged(auth, async user => {
     // Verificar si ya aceptó términos
     const yaAcepto = await verificarTerminos(user.uid);
     if (!yaAcepto) {
-      // Guardar aceptación (ya tildó el checkbox para poder entrar)
-      await guardarTerminos(user.uid);
+      try {
+        await setDoc(doc(db, 'terminos', user.uid), { uid: user.uid, email: user.email || '', aceptadoEn: new Date(), version: '1.0' });
+      } catch(e) {}
     }
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app-screen').style.display = 'block';
