@@ -137,7 +137,7 @@ footer{font-size:10px;color:#94A3B8;text-align:center;padding:16px 0 28px;line-h
     Entrar con Google
   </button>
 
-  <div style="display:flex;align-items:flex-start;gap:10px;max-width:300px;margin-top:16px;background:rgba(255,255,255,0.07);border-radius:10px;padding:12px">
+  <div id="terminos-box" style="display:flex;align-items:flex-start;gap:10px;max-width:300px;margin-top:16px;background:rgba(255,255,255,0.07);border-radius:10px;padding:12px">
     <input type="checkbox" id="acepto-terminos" onchange="toggleLoginBtn()" style="margin-top:2px;flex-shrink:0;width:16px;height:16px;cursor:pointer">
     <label for="acepto-terminos" style="font-size:10px;color:#94A3B8;line-height:1.6;cursor:pointer">
       Acepto que esta aplicación usa <strong style="color:#B8D4F0">Google Sign-In</strong> para identificarte — no almacenamos ni compartimos tu contraseña. Solo guardamos tu nombre y email para personalizar tu experiencia. Tus datos de entrenamiento son privados y solo vos podés verlos. Leé nuestra <span style="color:#00A8E8;text-decoration:underline;cursor:pointer" onclick="mostrarPrivacidad()">política de privacidad</span>.
@@ -721,7 +721,7 @@ footer{font-size:10px;color:#94A3B8;text-align:center;padding:16px 0 28px;line-h
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, getDoc, setDoc, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBtWc6sUYvwJTcCyPiSaGmtkB3zuRlgOUc",
@@ -762,7 +762,16 @@ const EJ = {
 
 window.loginGoogle = async () => {
   try {
-    await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    // Guardar aceptación en Firebase y hint local
+    await setDoc(doc(db, 'terminos', user.uid), {
+      uid: user.uid,
+      email: user.email || '',
+      aceptadoEn: new Date(),
+      version: '1.0'
+    });
+    localStorage.setItem('trf_terminos_ok', '1');
   } catch(e) {
     alert('Error al iniciar sesión: ' + e.message);
   }
@@ -784,13 +793,42 @@ window.cerrarPrivacidad = () => {
   document.getElementById('modal-privacidad').style.display = 'none';
 };
 
+// Verificar si el usuario ya aceptó términos → habilitar login directo
+async function verificarTerminos(uid) {
+  try {
+    const snap = await getDoc(doc(db, 'terminos', uid));
+    return snap.exists();
+  } catch(e) {
+    return false;
+  }
+}
+
 window.logout = async () => {
   await signOut(auth);
 };
 
-onAuthStateChanged(auth, user => {
+async function verificarTerminos(uid) {
+  try {
+    const snap = await getDocs(query(collection(db, 'terminos'), where('uid', '==', uid)));
+    return !snap.empty;
+  } catch(e) { return false; }
+}
+
+async function guardarTerminos(uid) {
+  try {
+    await addDoc(collection(db, 'terminos'), { uid, fecha: new Date(), version: '1.0' });
+  } catch(e) { console.log('error guardando términos', e); }
+}
+
+onAuthStateChanged(auth, async user => {
   currentUser = user;
   if (user) {
+    // Verificar si ya aceptó términos
+    const yaAcepto = await verificarTerminos(user.uid);
+    if (!yaAcepto) {
+      // Guardar aceptación (ya tildó el checkbox para poder entrar)
+      await guardarTerminos(user.uid);
+    }
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app-screen').style.display = 'block';
     const avatar = document.getElementById('user-avatar');
@@ -801,9 +839,27 @@ onAuthStateChanged(auth, user => {
     const nombre = user.displayName ? user.displayName.split(' ')[0] : 'Tu Rutina';
     document.getElementById('user-name').textContent = `Hola, ${nombre}`;
     registrarAcceso(user);
+    // Si ya aceptó términos antes, habilitar botón directo sin checkbox
+    if (yaAcepto) {
+      const btn = document.getElementById('btn-google');
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+      }
+      const termBox = document.getElementById('terminos-box');
+      if (termBox) termBox.style.display = 'none';
+    }
   } else {
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('app-screen').style.display = 'none';
+    // Si ya aceptó antes, habilitar botón directo sin checkbox
+    if (localStorage.getItem('trf_terminos_ok') === '1') {
+      const btn = document.getElementById('btn-google');
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+      const termBox = document.getElementById('terminos-box');
+      if (termBox) termBox.style.display = 'none';
+    }
   }
 });
 
@@ -1135,6 +1191,11 @@ window.limpiarHistorial = async () => {
 };
 
 window.renderRegistro();
+
+// Verificar términos al cargar para habilitar botón si ya aceptó
+auth.onAuthStateChanged || setTimeout(async () => {
+  // Esta verificación se hace en onAuthStateChanged
+}, 0);
 
 // ─── REGISTRO INLINE EN CARDS ───
 const EJ_INFO = {
