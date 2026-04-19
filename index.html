@@ -777,7 +777,7 @@ async function registrarAcceso(user) {
       const ultimo = snap.docs[0].data().fecha.toDate();
       const hoy = new Date();
       const dias = Math.floor((hoy - ultimo) / (1000*60*60*24));
-      if (dias === 0) diasMsg = 'Hoy ya entrenaste';
+      if (dias === 0) diasMsg = 'Bienvenido de nuevo';
       else if (dias === 1) diasMsg = 'Ayer fue tu última visita';
       else diasMsg = `Hace ${dias} días que no te veíamos por acá`;
     } else {
